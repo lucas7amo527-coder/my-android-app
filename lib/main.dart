@@ -1,122 +1,141 @@
-import 'package:material_ui/material_ui.dart';
+import 'dart:async';
+import 'dart:math';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:audioplayers/audioplayers.dart';
+import 'package:file_picker/file_picker.dart';
 
-void main() {
-  runApp(const MyApp());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.landscapeLeft,
+    DeviceOrientation.landscapeRight,
+  ]);
+  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+  runApp(const ProDjApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class ProDjApp extends StatelessWidget {
+  const ProDjApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
+      title: 'DJ Jay Chronix Pro',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData.dark().copyWith(
+        scaffoldBackgroundColor: const Color(0xFF0A0B0E),
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: const ProDjScreen(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+class ProDjScreen extends StatefulWidget {
+  const ProDjScreen({super.key});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<ProDjScreen> createState() => _ProDjScreenState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class _ProDjScreenState extends State<ProDjScreen> {
+  final AudioPlayer _playerA = AudioPlayer();
+  final AudioPlayer _playerB = AudioPlayer();
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+  // Deck A State (Cyan Blue)
+  String _trackA = 'Tap Load Icon ->';
+  bool _playingA = false;
+  double _pitchA = 0.0; // -10% to +10%
+  Duration _posA = Duration.zero;
+  Duration _durA = const Duration(minutes: 3, seconds: 45);
+  final Map<int, Duration> _cuesA = {};
+  int _loopBeatsA = 1;
+  String _activeFxA = '';
+
+  // Deck B State (Bright Orange)
+  String _trackB = '<- Tap Load Icon';
+  bool _playingB = false;
+  double _pitchB = 0.0;
+  Duration _posB = Duration.zero;
+  Duration _durB = const Duration(minutes: 3, seconds: 20);
+  final Map<int, Duration> _cuesB = {};
+  int _loopBeatsB = 1;
+  String _activeFxB = '';
+
+  double _crossfader = 0.5;
+  Timer? _waveTimer;
+  double _wavePhase = 0.0;
+
+  static const Color cyanAccent = Color(0xFF2196F3);
+  static const Color orangeAccent = Color(0xFFFF6D00);
+  static const Color panelDark = Color(0xFF16181D);
+  static const Color padDark = Color(0xFF23262E);
+
+  @override
+  void initState() {
+    super.initState();
+    _updateCrossfader();
+
+    _playerA.onPositionChanged.listen((p) {
+      if (mounted) setState(() => _posA = p);
+    });
+    _playerA.onDurationChanged.listen((d) {
+      if (mounted && d.inMilliseconds > 0) setState(() => _durA = d);
+    });
+    _playerA.onPlayerComplete.listen((_) {
+      if (mounted) setState(() => _playingA = false);
+    });
+
+    _playerB.onPositionChanged.listen((p) {
+      if (mounted) setState(() => _posB = p);
+    });
+    _playerB.onDurationChanged.listen((d) {
+      if (mounted && d.inMilliseconds > 0) setState(() => _durB = d);
+    });
+    _playerB.onPlayerComplete.listen((_) {
+      if (mounted) setState(() => _playingB = false);
+    });
+
+    _waveTimer = Timer.periodic(const Duration(milliseconds: 50), (_) {
+      if (_playingA || _playingB) {
+        setState(() => _wavePhase += 0.25);
+      }
     });
   }
 
-  @override
-  Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
-    return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: .center,
-          children: [
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ),
-    );
+  void _updateCrossfader() {
+    double volA = _crossfader <= 0.5 ? 1.0 : (1.0 - _crossfader) * 2;
+    double volB = _crossfader >= 0.5 ? 1.0 : _crossfader * 2;
+    _playerA.setVolume(volA.clamp(0.0, 1.0));
+    _playerB.setVolume(volB.clamp(0.0, 1.0));
   }
-}
+
+  Future<void> _loadTrack(bool isA) async {
+    final res = await FilePicker.platform.pickFiles(type: FileType.audio);
+    if (res != null && res.files.single.path != null) {
+      final path = res.files.single.path!;
+      final name = res.files.single.name;
+      if (isA) {
+        await _playerA.setSourceDeviceFile(path);
+        setState(() {
+          _trackA = name;
+          _playingA = false;
+          _posA = Duration.zero;
+          _cuesA.clear();
+        });
+      } else {
+        await _playerB.setSourceDeviceFile(path);
+        setState(() {
+          _trackB = name;
+          _playingB = false;
+          _posB = Duration.zero;
+          _cuesB.clear();
+        });
+      }
+    }
+  }
+
+  Future<void> _togglePlay(bool isA) async {
+    if (isA) {
+      if (_playingA) {
+        await _playerA.pause();
